@@ -1,0 +1,125 @@
+# CLAUDE.md — <your-brain> (Master Context)
+
+**Last updated:** YYYY-MM-DD — short note about what changed in this pass
+**Author:** Your Name <your-email>
+
+This is the master context file. Every coding agent (Claude Code, Codex, Cursor, ChatGPT, Manus, Dispatch) reads this first. It tells the agent the shape of your world: what repos exist, what the current state is, what rules apply, and how to behave.
+
+If you are setting this up for the first time, fill in the sections below. Nothing here is optional once you start working with multiple agents — without a real CLAUDE.md, every session has to reconstruct context from scratch.
+
+---
+
+## 1. What this repo is
+
+`<your-brain>` is the master source of truth for everything you build. It is NOT a product repo. It contains:
+
+- All system-wide rules and architectural decisions
+- All changelogs and documentation across projects
+- All session handoffs, competitive intel, and product specs
+- Implementation prompts for autonomous build work
+
+Working repos hold code. This repo holds context.
+
+---
+
+## 2. Repository map
+
+List every repo your agents might touch. Keep it short and grep-friendly.
+
+| Repo | Purpose | Domain |
+| :--- | :--- | :--- |
+| `your-brain` | Master knowledge base — this repo | N/A |
+| `your-brain-dashboard` | UI on top of this repo | `brain.your-domain.com` |
+| `your-product` | The thing you sell | `your-domain.com` |
+| `your-internal-crm` | Your operations console | `app.your-domain.com` |
+
+Add a row whenever a new repo enters the picture. Delete nothing — strikethrough if a repo is retired.
+
+---
+
+## 3. Current state
+
+A short, dated narrative of what is shipped and what is in flight. New entries go at the top. Aim for one paragraph per major beat. The point is to give an agent who just opened the repo a fast read on where things are.
+
+**YYYY-MM-DD — short headline:**
+- One sentence on what shipped today
+- One sentence on what is next
+- One sentence on what is blocked and why
+
+Past beats stay below; do not delete history.
+
+---
+
+## 4. Standing code rules
+
+Universal rules that apply across every product repo. Keep this list short and absolute.
+
+1. **No `any` types.** Use proper interfaces and strict types. If `any` is unavoidable, comment why.
+2. **No `console.log` in production code.** All logging must be structured or removed before commit.
+3. **No silent catches.** Catch blocks either throw typed errors or return standardized error objects.
+4. **Number formatting safety.** Wrap `.toLocaleString()` calls with `Number()` to prevent runtime crashes on null/undefined.
+5. **Additive-only migrations.** Database migrations are additive and non-destructive. Never drop columns or tables without explicit approval.
+6. **API integrations.** Never use SDKs in server routes (Stripe, Twilio, etc.). Always use direct REST `fetch` calls.
+
+Add rules as you discover them; never delete one.
+
+---
+
+## 5. Commit conventions
+
+- **Commit author:** `Your Name <your-email>`
+- **Commit message format:** `[YYYY-MM-DD] <agent> — <description>`
+  - Examples: `[2026-05-09] Claude Code — feat: add onboarding wizard`, `[2026-05-09] Codex — fix: lane 3 RLS regression`
+- **Branch naming:** `feature/<feature-name>`, `fix/<bug-name>`, `chore/<task-name>`
+- **PRs vs direct push:** decide once, write it here, do not waver.
+
+---
+
+## 6. Infrastructure
+
+List the production accounts and IDs your agents need to know.
+
+| System | Account / ID | Purpose |
+| :--- | :--- | :--- |
+| Hosting | `<provider>` | <where prod lives> |
+| Database | `<provider>` | <where data lives> |
+| Email | `<provider>` | <transactional sender> |
+| Error monitoring | `<provider>` | <where errors land> |
+
+Do not paste API keys into this file. Reference env var names instead.
+
+---
+
+## 7. Behavior rules for agents
+
+How you want agents to behave when they read this file.
+
+1. Treat everything in this repo as authoritative.
+2. Preserve all information — do not compress, rewrite, or delete historical data.
+3. When asked for context, return only what is relevant to the task.
+4. If structure is unclear, identify gaps instead of guessing.
+5. Do not apply implementation logic to this repo — this is a thinking repo, not a product repo.
+6. Keep changes narrowly scoped and follow existing patterns.
+7. Check `git status` before making changes. If dirty, surface it before proceeding.
+
+---
+
+## 8. Cross-references
+
+- `AGENTS.md` — cross-agent role rules and handoff protocol
+- `MEMORY.md` — append-only fact ledger (the standing facts)
+- `Daily_Log.md` — append-only timeline of what was done
+- `Decision_Log.md` — decisions with rationale and alternatives considered
+- `Change_Log.md` — commit-style ledger across all repos
+- `Feature_Inventory.md` — feature status (full / partial / planned)
+
+---
+
+## Runtime execution layer
+
+When operating across repositories:
+
+- Global source of truth: `~/your-brain`
+- Always read in this order: (1) `~/your-brain/AGENTS.md`, (2) local repo `CLAUDE.md`, (3) local repo `AGENTS.md`
+- Repo-local files control implementation; the brain controls system context.
+- Check `git status` before making changes. If dirty, explain before proceeding.
