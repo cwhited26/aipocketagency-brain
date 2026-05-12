@@ -41,19 +41,19 @@ This is one of the **4-Place Rule** files. Decisions also get a one-line entry i
 
 ```
 **Decision #1** — 2026-05-09
-**Title:** Hosted brain dashboard fork-and-retrofit, not greenfield
+**Title:** Hosted dashboard fork-and-retrofit, not greenfield
 
-**Context:** APA's hosted brain product needs a dashboard at `<handle>.brain.aipocketagency.com`. Two paths: greenfield rewrite, or fork the existing `whited-brain-dashboard` and swap the data layer.
+**Context:** The hosted product needs a dashboard at `<handle>.<your-domain>`. Two paths: greenfield rewrite, or fork an existing internal dashboard and swap the data layer.
 
-**Decision:** Fork-and-retrofit. Copy `whited-brain-dashboard` source into a new `apa-brain-app` repo and swap reads + writes from the local filesystem to the REST API.
+**Decision:** Fork-and-retrofit. Copy the internal dashboard source into a new app repo and swap reads + writes from the local filesystem to the REST API.
 
 **Alternatives considered:**
 - Greenfield rewrite — clean code but throws away every UI bug already fixed.
-- Multi-tenant the existing repo in place — couples the personal brain to the hosted product; the personal brain has different scope.
+- Multi-tenant the existing repo in place — couples the internal tool to the hosted product; the internal tool has different scope.
 
-**Rationale:** The existing dashboard already has the file tree, inline markdown viewer, quick-links editor, and Phase A interactive task board patterns. A rewrite re-introduces every UI bug already fixed. Forking preserves the investment, swaps only the data layer, and lets the personal brain stay on its own infra.
+**Rationale:** The existing dashboard already has the file tree, inline markdown viewer, quick-links editor, and interactive task-board patterns. A rewrite re-introduces every UI bug already fixed. Forking preserves the investment, swaps only the data layer, and lets the internal tool stay on its own infra.
 
-**Decided by:** Chase / Claude Code
+**Decided by:** <operator> / <agent>
 
-**References:** `Hosted_Brain_Stack_Architecture.md` §1.6, `Daily_Log.md` 2026-05-09 entry.
+**References:** `Hosted_Stack_Architecture.md` §1.6, `Daily_Log.md` 2026-05-09 entry.
 ```

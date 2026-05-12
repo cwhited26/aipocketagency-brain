@@ -31,25 +31,25 @@ If the day produced a decision, link to the Decision Log entry. If it produced a
 ## Example entries
 
 ```
-## 2026-05-09 — Hosted brain architecture locked
+## 2026-05-09 — Hosted dashboard architecture locked
 
-Wrote `Hosted_Brain_Stack_Architecture.md`. Eight architectural decisions answered: domain (`brain.aipocketagency.com`), subdomain pattern (`<handle>.brain.aipocketagency.com`), API surface (REST first, MCP wrapper Phase 1.5), storage (single Supabase project with RLS), auth (magic link), dashboard (fork-and-retrofit `whited-brain-dashboard`), brain ownership on cancel (90-day grace + always-on export), self-host upgrade path (data shape only in Phase 1).
+Wrote `Hosted_Stack_Architecture.md`. Eight architectural decisions answered: domain, subdomain pattern, API surface (REST first, MCP wrapper later), storage (single managed database with row-level security), auth (magic link), dashboard (fork-and-retrofit existing internal dashboard), data ownership on cancel (90-day grace + always-on export), self-host upgrade path (data shape only in v1).
 
-Did not start the build. Lane 1 (tenant + auth + provisioning) is next. The largest cost-saver: BOS Hosted Phase 0 already built almost all the multi-tenant infra patterns. Decision logged at Decision Log Decision #33.
+Did not start the build. Lane 1 (tenant + auth + provisioning) is next. Largest cost-saver: prior multi-tenant infra patterns from an internal project already cover ~80% of what's needed. Decision logged at Decision Log Decision #N.
 ```
 
 ```
-## 2026-05-08 — APA founding-50 paywall live
+## 2026-05-08 — Founding-50 paywall live
 
-Stripe products created: APA Founding 50 ($47/mo), APA Standard ($97/mo). Checkout pages live at `aipocketagency.com/start`. Membership cap on the founding SKU is enforced via webhook count check before each checkout — once 50 active subscriptions are on the founding SKU, the checkout flips to the Standard SKU automatically.
+Stripe products created: Founding 50 ($47/mo), Standard ($97/mo). Checkout pages live at `<your-domain>/start`. Membership cap on the founding SKU is enforced via webhook count check before each checkout — once 50 active subscriptions are on the founding SKU, the checkout flips to the Standard SKU automatically.
 
-Sales page copy unchanged. No marketing push yet. First five founding members coming from existing audience inviteds.
+Sales page copy unchanged. No marketing push yet. First five founding members coming from existing audience invites.
 ```
 
 ```
 ## 2026-05-07 — Lane 3 item 12 shipped
 
-Commit `<sha>` on `main` of `cwhited26/<repo>`. Post-milestone sequence picker added — sequences pre-load by job stage and you can override per-job before sending. RLS test added for the new `sequence_picks` table. Build passes.
+Commit `<sha>` on `main` of `<your-product-repo>`. Post-milestone sequence picker added — sequences pre-load by job stage and you can override per-job before sending. RLS test added for the new `sequence_picks` table. Build passes.
 
-Browser smoke test NOT performed (no logged-in client session in scope today). End-to-end browser verification is on Chase to confirm tomorrow.
+Browser smoke test NOT performed (no logged-in client session in scope today). End-to-end browser verification is on the operator to confirm tomorrow.
 ```

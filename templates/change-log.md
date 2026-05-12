@@ -37,18 +37,18 @@ This is one of the **4-Place Rule** files. The change log is the receipt that so
 ```
 ## 2026-05-09
 
-- `apa-brain-app` `a1b2c3d` — feat: onboarding wizard step 4 — first memory entry
+- `<your-product>` `a1b2c3d` — feat: onboarding wizard step 4 — first memory entry
   - Added `<FirstMemoryStep>` component; wires `POST /v1/brain/memory` on submit.
   - No migration.
   - Vitest unit tests for the form validator added; Playwright E2E updated to cover the wizard happy path.
 
-- `aipocketagency-brain` `e5f6g7h` — docs: lane 3 dashboard retrofit plan
-  - New file `lane-3-action-plan.md`. Status: awaiting Chase greenlight on fire order.
+- `<your-brain>` `e5f6g7h` — docs: lane 3 dashboard retrofit plan
+  - New file `lane-3-action-plan.md`. Status: awaiting operator greenlight on fire order.
   - No code changes.
 
 ## 2026-05-08
 
-- `apa-brain-app` `9876abc` — feat: subdomain tenant resolution middleware
+- `<your-product>` `9876abc` — feat: subdomain tenant resolution middleware
   - Reads `<handle>` from `Host` header, looks up `tenants` row, sets `tenant_id` on the request context for downstream handlers.
   - No migration.
   - Vitest test added covering wildcard match + reserved-root-paths bypass.

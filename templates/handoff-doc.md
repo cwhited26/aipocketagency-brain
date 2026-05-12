@@ -78,7 +78,7 @@ State which layers were verified for the work done this session.
 - **Remote layer.** Push confirmed (`git ls-remote origin <branch>` matches local HEAD).
 - **Behavior-verified layer.** End-to-end smoke test through the actual UI.
 
-If a layer was not reachable this session, say so explicitly. "Browser smoke test NOT performed — UI verification on Chase / client" is the canonical phrasing.
+If a layer was not reachable this session, say so explicitly. "Browser smoke test NOT performed — UI verification on the operator / client" is the canonical phrasing.
 
 ---
 
