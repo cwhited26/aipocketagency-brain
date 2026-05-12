@@ -1,0 +1,286 @@
+#!/usr/bin/env bash
+# brain — ambient memory CLI for the AI Pocket Agency brain pattern
+#
+# Subcommands: status | search | consolidate | sync | prune | help
+# See `brain --help` for usage.
+
+set -euo pipefail
+
+cmd="${1:-help}"
+shift || true
+
+find_root() {
+  local p
+  p="$(pwd)"
+  while [[ "$p" != "/" ]]; do
+    if [[ -f "$p/.brain-config.json" ]]; then
+      echo "$p"
+      return 0
+    fi
+    p="$(dirname "$p")"
+  done
+  return 1
+}
+
+case "$cmd" in
+
+  status)
+    ROOT="$(find_root)" || { echo "brain: no .brain-config.json found above $(pwd)" >&2; exit 1; }
+    cd "$ROOT"
+    echo "Brain root: $ROOT"
+    if [[ -f .brain-config.json ]]; then
+      proj=$(python3 -c "import json,sys; print(json.load(open('.brain-config.json')).get('project_name','?'))" 2>/dev/null || echo "?")
+      echo "Project:    $proj"
+    fi
+    total=$(find sessions -type f -name '*.md' 2>/dev/null | wc -l | tr -d ' ')
+    echo "Sessions:   $total markdown files"
+    if [[ -d sessions ]]; then
+      last_file=$(find sessions -type f -name '*.md' -not -path 'sessions/_archived/*' -print 2>/dev/null \
+        | xargs -I{} stat -f '%m %N' {} 2>/dev/null \
+        | sort -rn | head -1 | cut -d' ' -f2-)
+      if [[ -n "$last_file" ]]; then
+        ts=$(stat -f "%Sm" -t "%Y-%m-%d %H:%M:%S" "$last_file" 2>/dev/null || stat -c "%y" "$last_file" 2>/dev/null || echo "?")
+        echo "Last:       $last_file"
+        echo "            ($ts)"
+      fi
+      size=$(du -sh sessions 2>/dev/null | cut -f1)
+      echo "Disk:       $size on sessions/"
+    fi
+    if [[ -d memory/.proposed ]]; then
+      pcount=$(find memory/.proposed -type f -name '*.md' 2>/dev/null | wc -l | tr -d ' ')
+      echo "Pending:    $pcount proposal(s) in memory/.proposed/"
+    fi
+    if [[ -f .brain-cursor ]]; then
+      cur="$(cat .brain-cursor 2>/dev/null)"
+      cur_int="${cur%%.*}"
+      cur_ts=$(date -r "$cur_int" "+%Y-%m-%d %H:%M:%S" 2>/dev/null || echo "?")
+      echo "Consolidated through: $cur_ts"
+    else
+      echo "Consolidated through: never"
+    fi
+    if [[ -f sessions/.heartbeat ]]; then
+      echo "Hook heartbeat:       $(cat sessions/.heartbeat)"
+    else
+      echo "Hook heartbeat:       (none yet — run a Claude Code session)"
+    fi
+    ;;
+
+  search)
+    if [[ $# -lt 1 ]]; then
+      echo "Usage: brain search <query>" >&2
+      exit 1
+    fi
+    ROOT="$(find_root)" || { echo "brain: no .brain-config.json found" >&2; exit 1; }
+    cd "$ROOT"
+    if command -v rg >/dev/null 2>&1; then
+      rg -i "$@" sessions/ memory/ --max-count=5 --heading --line-number || echo "(no matches)"
+    else
+      grep -rni "$@" sessions/ memory/ 2>/dev/null | head -50 || echo "(no matches)"
+    fi
+    ;;
+
+  consolidate)
+    ROOT="$(find_root)" || { echo "brain: no .brain-config.json found" >&2; exit 1; }
+    cd "$ROOT"
+    python3 - "$ROOT" <<'PYEOF'
+import json, os, re, sys, subprocess, pathlib, time, urllib.request
+
+root = pathlib.Path(sys.argv[1])
+cursor = root / ".brain-cursor"
+proposed = root / "memory" / ".proposed"
+proposed.mkdir(parents=True, exist_ok=True)
+
+# ANTHROPIC_API_KEY: env first, then getsecret fallback
+api_key = os.environ.get("ANTHROPIC_API_KEY")
+if not api_key:
+    try:
+        api_key = subprocess.check_output(
+            ["getsecret", "op://Personal/Anthropic/api_key"],
+            text=True, stderr=subprocess.DEVNULL,
+        ).strip()
+    except Exception:
+        pass
+if not api_key:
+    print("ERROR: ANTHROPIC_API_KEY not set and 1Password fallback failed.", file=sys.stderr)
+    print("  export ANTHROPIC_API_KEY=...", file=sys.stderr)
+    print("  or: ensure 'getsecret' is on PATH and op://Personal/Anthropic/api_key resolves", file=sys.stderr)
+    sys.exit(1)
+
+last_run = 0.0
+if cursor.exists():
+    try:
+        last_run = float(cursor.read_text().strip())
+    except Exception:
+        last_run = 0.0
+
+sessions_dir = root / "sessions"
+all_sessions = []
+if sessions_dir.exists():
+    for d in sorted(sessions_dir.iterdir()):
+        if not d.is_dir() or d.name.startswith("_") or d.name.startswith("."):
+            continue
+        for f in sorted(d.glob("*.md")):
+            all_sessions.append((f.stat().st_mtime, f))
+
+new_sessions = [s for s in all_sessions if s[0] > last_run]
+
+if not new_sessions:
+    print("No new sessions since last consolidation.")
+    sys.exit(0)
+
+prompt_path = root / "templates" / "prompts" / "consolidate.txt"
+if not prompt_path.exists():
+    print(f"ERROR: prompt template missing at {prompt_path}", file=sys.stderr)
+    sys.exit(1)
+prompt_template = prompt_path.read_text()
+
+print(f"Consolidating {len(new_sessions)} session(s)...")
+proposed_count = 0
+
+for mtime, sess_file in new_sessions:
+    transcript = sess_file.read_text()
+    if len(transcript.strip()) < 200:
+        print(f"  {sess_file.name}: too short, skipping")
+        continue
+    body = prompt_template.replace("<<<INSERT TRANSCRIPT HERE>>>", transcript[:80000])
+    req = urllib.request.Request(
+        "https://api.anthropic.com/v1/messages",
+        data=json.dumps({
+            "model": "claude-haiku-4-5-20251001",
+            "max_tokens": 4096,
+            "messages": [{"role": "user", "content": body}],
+        }).encode(),
+        headers={
+            "content-type": "application/json",
+            "x-api-key": api_key,
+            "anthropic-version": "2023-06-01",
+        },
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=90) as resp:
+            data = json.loads(resp.read())
+    except Exception as e:
+        print(f"  {sess_file.name}: API error: {e}", file=sys.stderr)
+        continue
+
+    text = ""
+    for c in data.get("content", []):
+        if c.get("type") == "text":
+            text += c.get("text", "")
+    text = text.strip()
+    if not text or text == "NO_PROPOSALS":
+        print(f"  {sess_file.name}: no proposals")
+        continue
+
+    chunks = [c.strip() for c in re.split(r"\n(?=---\n)", text) if c.strip().startswith("---")]
+    sess_id = sess_file.stem
+    for i, chunk in enumerate(chunks, 1):
+        out = proposed / f"{sess_id}-{i:02d}.md"
+        # Prepend a source_sessions header for FM-3 spot-check
+        wrapped = chunk
+        if "source_sessions:" not in chunk.split("---")[1]:
+            wrapped = chunk.replace(
+                "---\n", f"---\nsource_sessions: [{sess_file.relative_to(root)}]\n", 1
+            )
+        out.write_text(wrapped + "\n")
+        proposed_count += 1
+    print(f"  {sess_file.name}: {len(chunks)} proposal(s)")
+
+if all_sessions:
+    cursor.write_text(str(max(s[0] for s in all_sessions)))
+
+print(f"\nConsolidated {len(new_sessions)} session(s), proposed {proposed_count} memory entr(ies) to memory/.proposed/")
+print("Review each: open the file, then either")
+print("  mv memory/.proposed/<file> memory/<file>   (accept — and update MEMORY.md)")
+print("  rm memory/.proposed/<file>                  (reject)")
+PYEOF
+    ;;
+
+  sync)
+    ROOT="$(find_root)" || { echo "brain: no .brain-config.json found" >&2; exit 1; }
+    cd "$ROOT"
+    echo "==> git pull --rebase"
+    git pull --rebase
+    echo "==> git push"
+    git push
+    echo "==> sync complete"
+    ;;
+
+  prune)
+    ROOT="$(find_root)" || { echo "brain: no .brain-config.json found" >&2; exit 1; }
+    cd "$ROOT"
+    days="${1:-90}"
+    if ! [[ "$days" =~ ^[0-9]+$ ]]; then
+      echo "Usage: brain prune [days]   (default 90)" >&2
+      exit 1
+    fi
+    year=$(date +%Y)
+    arch="sessions/_archived/$year"
+    mkdir -p "$arch"
+    cutoff=$(date -v "-${days}d" +%Y-%m-%d 2>/dev/null || date -d "${days} days ago" +%Y-%m-%d)
+    if [[ -z "$cutoff" ]]; then
+      echo "brain prune: could not compute cutoff date" >&2
+      exit 1
+    fi
+    moved=0
+    for d in sessions/*/; do
+      name="$(basename "$d")"
+      [[ "$name" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ ]] || continue
+      if [[ "$name" < "$cutoff" ]]; then
+        mv "$d" "$arch/"
+        echo "  archived $name -> $arch/"
+        moved=$((moved + 1))
+      fi
+    done
+    echo "Archived $moved day-directories older than $cutoff to $arch/"
+    ;;
+
+  help|--help|-h|"")
+    cat <<'EOF'
+brain — ambient memory CLI
+
+USAGE
+  brain <command> [args]
+
+COMMANDS
+  status             Heartbeat check: total sessions, last capture, size, pending proposals
+  search <query>     Ripgrep over sessions/ and memory/
+  consolidate        Send new sessions to Claude Haiku → write memory/.proposed/ for review
+  sync               git pull --rebase && git push (multi-machine sync)
+  prune [days]       Archive sessions/YYYY-MM-DD/ older than N days (default 90)
+                     into sessions/_archived/<year>/ — never deletes
+  help               This message
+
+EXAMPLES
+  brain status
+  brain search "stripe webhook"
+  brain consolidate
+  brain prune 60
+
+REVIEW WORKFLOW (after `brain consolidate`)
+  ls memory/.proposed/                       # see proposals
+  cat memory/.proposed/<file>                # inspect each
+  mv memory/.proposed/<file> memory/<file>   # accept → then add line to MEMORY.md index
+  rm memory/.proposed/<file>                 # reject
+
+CONFIG
+  .brain-config.json at repo root controls:
+    capture_enabled       — bool, master toggle for the Stop hook
+    project_name          — override the cwd-inferred name
+    redaction_patterns    — regex list, applied at write time and at commit time
+    client_name_patterns  — regex list, additional sensitive-name patterns
+    verbose_tool_calls    — bool, expand tool I/O instead of one-line summaries
+
+ANTHROPIC_API_KEY
+  `brain consolidate` reads ANTHROPIC_API_KEY from the environment, falling
+  back to: getsecret op://Personal/Anthropic/api_key
+EOF
+    ;;
+
+  *)
+    echo "brain: unknown command '$cmd'" >&2
+    echo "Try: brain --help" >&2
+    exit 1
+    ;;
+esac

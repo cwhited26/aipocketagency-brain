@@ -51,6 +51,31 @@ Output is informational. The script never auto-edits anything — it just shows 
 
 ---
 
+## `brain`
+
+CLI for the ambient capture layer (Layer 2). Installed via `bash install-ambient.sh` at the brain root, which also symlinks it to `~/.local/bin/brain` so you can call it from anywhere.
+
+```bash
+brain status              # heartbeat + counts + last capture
+brain search <query>      # ripgrep over sessions/ + memory/
+brain consolidate         # send new sessions → Claude Haiku → memory/.proposed/ for review
+brain sync                # git pull --rebase && git push
+brain prune [days]        # archive sessions older than N days (default 90)
+brain --help              # full reference
+```
+
+Configuration: `.brain-config.json` at the brain root controls capture toggle, project name, redaction patterns, and per-project client-name patterns. The Stop hook (Layer A) and pre-commit hook (Layer B) read the same config — edit once.
+
+**Architectural rationale:** `Ambient_Brain_Architecture.md` (in the parent `whited-brain` repo) — covers the 12 decisions, 5 failure modes, retention policy, and Module 6 curriculum.
+
+**Run cadence:**
+- `brain status` — whenever; cheap and stateless.
+- `brain consolidate` — weekly, then review `memory/.proposed/` and accept or reject each file.
+- `brain sync` — between machines.
+- `brain prune` — quarterly if `brain status` shows >500MB on `sessions/`.
+
+---
+
 ## Adding your own scripts
 
 The bar for adding a script here: it codifies a convention that lives in `memory-conventions/`. If a pattern is repeated by hand often enough that you keep getting it wrong, write a script for it and document the convention.

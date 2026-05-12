@@ -1,0 +1,20 @@
+{
+  "capture_enabled": true,
+  "project_name": "your-brain",
+  "redaction_patterns": [
+    "(?i)sk_(test|live)_[a-zA-Z0-9_]{20,}",
+    "(?i)rk_(test|live)_[a-zA-Z0-9_]{20,}",
+    "(?i)pk_(test|live)_[a-zA-Z0-9_]{20,}",
+    "sk-ant-[a-zA-Z0-9_-]{40,}",
+    "(?i)whsec_[a-zA-Z0-9_]{15,}",
+    "[Bb]earer [a-zA-Z0-9._~+/=_-]{20,}",
+    "gh[pousr]_[A-Za-z0-9_]{36,}",
+    "cfat?_[A-Za-z0-9_-]{30,}",
+    "ops_[A-Za-z0-9._-]{30,}",
+    "AKIA[0-9A-Z]{16}",
+    "sk-[A-Za-z0-9]{20,}",
+    "[A-Za-z0-9+/]{40,}={0,2}"
+  ],
+  "verbose_tool_calls": false,
+  "client_name_patterns": []
+}

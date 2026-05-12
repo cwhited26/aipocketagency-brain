@@ -10,6 +10,11 @@ This repo is the public-facing companion to the AI Pocket Agency Skool community
 aipocketagency-brain/
 ├── README.md                    ← this file
 ├── LICENSE                      ← MIT
+├── install-ambient.sh           ← Layer 2 install — Stop hook + pre-commit + brain CLI
+├── .brain-config.json.example   ← starter config for the ambient capture layer
+├── sessions/                    ← (empty placeholder) where Layer 2 writes transcripts
+├── memory/                      ← (empty placeholder) members' brain entries land here
+│   └── .proposed/               ← consolidate-pass output awaiting review
 ├── deliverables/                ← per-module classroom assets (PDFs + markdown)
 │   ├── module-1-install/        ← first-5-min checklist, dashboard tour, wiring snippet, first memory
 │   ├── module-2-conventions/    ← cheat sheet, wrong/right gallery, apply-to-your-business worksheet
@@ -20,23 +25,19 @@ aipocketagency-brain/
     ├── CLAUDE.md                ← master context — agent's first read
     ├── AGENTS.md                ← cross-agent rules
     ├── MEMORY.md                ← append-only fact ledger (index)
-    ├── memory-types/            ← four memory-file conventions
-    │   ├── user.md
-    │   ├── feedback.md
-    │   ├── project.md
-    │   └── reference.md
+    ├── memory-types/            ← four memory-file conventions (user / feedback / project / reference)
     ├── memory-conventions/      ← ready-to-paste brain operating conventions
-    │   ├── README.md
-    │   ├── four-place-rule.md
-    │   ├── supersession-pattern.md
-    │   ├── cascade-staleness.md
-    │   ├── lane-current-state.md
-    │   ├── cloudflare-token-verify-gotcha.md
-    │   └── vercel-sensitive-env-gotcha.md
     ├── bin/                     ← brain operating scripts
     │   ├── README.md
     │   ├── lane-summary.sh      ← auto-roll <Lane>/Current_State.md
-    │   └── stale-audit.sh       ← surface drift from changed upstreams
+    │   ├── stale-audit.sh       ← surface drift from changed upstreams
+    │   └── brain                ← Layer 2 ambient memory CLI (status / search / consolidate / sync / prune)
+    ├── hooks/                   ← Claude Code Stop hook source
+    │   └── brain-ambient-capture.sh
+    ├── git-hooks/               ← pre-commit safety net for sessions/
+    │   └── pre-commit
+    ├── prompts/                 ← LLM prompt templates
+    │   └── consolidate.txt
     ├── handoff-doc.md           ← session handoff template
     ├── daily-log.md             ← append-only timeline of what happened
     ├── decision-log.md          ← decisions with rationale + alternatives
@@ -145,6 +146,81 @@ bash bin/stale-audit.sh
 You should see `_No files declare `**Depends on:**` yet._` — the pattern is opt-in, and your fresh brain hasn't opted in to anything yet. Read `memory-conventions/cascade-staleness.md` to learn when to add a `**Depends on:**` block.
 
 You now have a working brain with the four log/inventory files, a starter memory entry, and the two operating scripts wired. Each module in `deliverables/` walks deeper into one slice of this pattern.
+
+## Install ambient capture (Layer 2)
+
+Layer 1 above is the **intentional** brain — files you deliberately edit. Layer 2 is the **ambient** brain — every Claude Code session captured automatically to `sessions/`, then consolidated periodically into the intentional layer via a human-reviewed pass. Together they make a complete brain: nothing important from your conversations is lost.
+
+Architectural rationale, failure modes, and the Module 6 curriculum live in `Ambient_Brain_Architecture.md` in the parent (`whited-brain`) repo. The implementation ships here.
+
+### Prerequisites
+
+- Claude Code installed and on your PATH (`which claude` returns a path)
+- `python3` (system Python on macOS / Linux is fine)
+- `ANTHROPIC_API_KEY` in your environment when you want to run `brain consolidate`
+- *Optional but recommended:* `brew install gitleaks` for a second commit-time scan
+
+### Install
+
+From the brain root (your cloned/forked copy of this template):
+
+```bash
+bash install-ambient.sh
+```
+
+The script is idempotent and safe to re-run. It:
+
+1. Copies the Stop hook to `~/.claude/hooks/brain-ambient-capture.sh`.
+2. Merges a `Stop` hook entry into `~/.claude/settings.json` (preserves all existing hooks).
+3. Writes `.brain-config.json` at the brain root *only if absent* (mirrors `.brain-config.json.example`).
+4. Creates `sessions/.gitkeep` and `memory/.proposed/.gitkeep`.
+5. Installs `.git/hooks/pre-commit` (backs up any existing one).
+6. Symlinks `~/.local/bin/brain` to your `bin/brain` so the CLI is on PATH.
+
+After install, ensure `~/.local/bin` is on your PATH (`echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.zshrc`) and verify:
+
+```bash
+brain status
+```
+
+You should see your brain root, project name, and a "Hook heartbeat: (none yet)" line. Open a Claude Code session in this repo, exchange a few messages, exit Claude Code, and re-run `brain status` — the heartbeat updates and your transcript appears at `sessions/YYYY-MM-DD/HHmmss-*.md`.
+
+### The brain CLI
+
+```
+brain status              heartbeat check + counts
+brain search <query>      ripgrep over sessions/ and memory/
+brain consolidate         send new sessions to Claude Haiku → memory/.proposed/ for review
+brain sync                git pull --rebase && git push
+brain prune [days]        archive sessions older than N days (default 90)
+brain --help              full reference
+```
+
+### Tuning redaction
+
+`.brain-config.json` controls what the Stop hook redacts at write time and what the pre-commit hook blocks at commit time. Out of the box it catches the common secret patterns (Stripe, Anthropic, GitHub, Cloudflare, 1Password, generic base64). Add client names and proprietary identifiers to `client_name_patterns`:
+
+```json
+"client_name_patterns": [
+  "(?i)AcmeCorp",
+  "(?i)customer-internal-id-prefix"
+]
+```
+
+Both layers (Layer A in the hook, Layer B in pre-commit) read the same list. Edit once.
+
+### Review workflow
+
+After running `brain consolidate`:
+
+```bash
+ls memory/.proposed/                            # see what Haiku proposed
+cat memory/.proposed/<file>                     # inspect each
+mv memory/.proposed/<file> memory/<file>        # accept → then add a line to MEMORY.md
+rm memory/.proposed/<file>                      # reject
+```
+
+Human review is mandatory — never accept proposals blind. Each proposal carries a `source_sessions:` frontmatter field so you can trace back the transcripts it summarizes.
 
 ## Brain operating conventions
 

@@ -1,0 +1,128 @@
+#!/usr/bin/env bash
+# pre-commit — brain-ambient-pre-commit-marker
+#
+# Layer B of the ambient capture safety net. Scans staged session transcripts
+# under sessions/ for any redaction-pattern hit or member-defined client name.
+# Blocks the commit on a match so the secret never reaches git history.
+#
+# If `gitleaks` is on PATH, runs it as a secondary broader check. Warns once
+# per machine if absent. Members can override per-commit with `--no-verify`.
+#
+# Reference: Ambient_Brain_Architecture.md Decision 6 Layer B / FM-2.
+
+set -euo pipefail
+
+REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
+CONFIG="$REPO_ROOT/.brain-config.json"
+
+[[ -f "$CONFIG" ]] || exit 0
+
+STAGED="$(git diff --cached --name-only --diff-filter=ACMR -- 'sessions/*.md' 'sessions/**/*.md' 2>/dev/null || true)"
+
+if [[ -z "$STAGED" ]]; then
+  # Nothing under sessions/ — let normal commit flow continue.
+  exit 0
+fi
+
+STAGED_COUNT="$(printf '%s\n' "$STAGED" | wc -l | tr -d ' ')"
+printf '\033[36m[brain pre-commit]\033[0m scanning %s staged session file(s)...\n' "$STAGED_COUNT"
+
+# --- gitleaks (broad coverage) -------------------------------------------------
+if command -v gitleaks >/dev/null 2>&1; then
+  if ! gitleaks protect --staged --no-banner --redact >/dev/null 2>&1; then
+    echo "" >&2
+    echo "==> BLOCKED by gitleaks: secret detected in staged content" >&2
+    echo "    Inspect: gitleaks protect --staged --no-banner -v" >&2
+    echo "    Override (only if certain): git commit --no-verify" >&2
+    echo "" >&2
+    exit 1
+  fi
+else
+  WARN_MARKER="$HOME/.cache/brain-gitleaks-warned"
+  if [[ ! -f "$WARN_MARKER" ]]; then
+    mkdir -p "$(dirname "$WARN_MARKER")"
+    : > "$WARN_MARKER"
+    echo "note: gitleaks not installed (brew install gitleaks). Regex fallback engaged." >&2
+  fi
+fi
+
+# --- Internal regex pass (.brain-config.json patterns) ------------------------
+# Scans the staged blob (git show :path), not the working tree, so a redacted
+# working tree can't hide a staged-but-unredacted secret.
+
+python3 - "$REPO_ROOT" "$STAGED" <<'PY' || exit $?
+import json, re, subprocess, sys, pathlib
+
+repo = pathlib.Path(sys.argv[1])
+cfg = json.loads((repo / ".brain-config.json").read_text())
+
+staged_files = [l.strip() for l in sys.argv[2].splitlines() if l.strip()]
+
+compiled = []
+# generic-base64-ish patterns false-positive wildly on normal markdown
+# (long hashes, encoded images, asset URLs). Layer A handles them at write
+# time; Layer B skips them so it doesn't block legitimate commits.
+GENERIC_BASE64_HINTS = ("[A-Za-z0-9+/]{40", "[A-Za-z0-9_-]{40", "[A-Za-z0-9+/=_-]{40")
+
+for p in cfg.get("redaction_patterns", []):
+    name = rx_src = None
+    if isinstance(p, dict):
+        name = p.get("name", "secret")
+        rx_src = p.get("regex", "")
+    elif isinstance(p, str):
+        name = "secret"
+        rx_src = p
+    if not rx_src:
+        continue
+    if name == "generic_base64" or any(h in rx_src for h in GENERIC_BASE64_HINTS):
+        continue
+    try:
+        compiled.append((name, re.compile(rx_src)))
+    except re.error:
+        pass
+
+for cn in cfg.get("client_name_patterns", []):
+    if not cn:
+        continue
+    try:
+        compiled.append(("client_name", re.compile(re.escape(cn), re.IGNORECASE)))
+    except re.error:
+        pass
+
+hits = []
+for path in staged_files:
+    try:
+        blob = subprocess.check_output(
+            ["git", "show", f":{path}"], cwd=repo, text=True,
+            stderr=subprocess.DEVNULL,
+        )
+    except subprocess.CalledProcessError:
+        continue
+    for lineno, line in enumerate(blob.splitlines(), 1):
+        for name, rx in compiled:
+            m = rx.search(line)
+            if m:
+                hits.append((path, lineno, name, line.strip()[:120]))
+                break
+
+if hits:
+    print("", file=sys.stderr)
+    print("==> BLOCKED by pre-commit: possible secret/PII in staged session files", file=sys.stderr)
+    for path, lineno, name, snippet in hits[:30]:
+        print(f"   {path}:{lineno}  pattern={name}", file=sys.stderr)
+        print(f"     -> {snippet}", file=sys.stderr)
+    if len(hits) > 30:
+        print(f"   ... and {len(hits) - 30} more", file=sys.stderr)
+    print("", file=sys.stderr)
+    print("Remediation:", file=sys.stderr)
+    print("  1. Open the flagged file(s); replace the secret with [REDACTED:<name>].", file=sys.stderr)
+    print("  2. git add <file>", file=sys.stderr)
+    print("  3. Retry the commit.", file=sys.stderr)
+    print("", file=sys.stderr)
+    print("False positive? Tighten the regex in .brain-config.json.", file=sys.stderr)
+    print("Override (only if certain): git commit --no-verify", file=sys.stderr)
+    print("", file=sys.stderr)
+    sys.exit(1)
+PY
+
+exit 0

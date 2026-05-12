@@ -1,0 +1,32 @@
+You are reviewing a Claude Code session transcript for memory consolidation.
+
+Read the transcript below. Propose memory entries ONLY for:
+- Decisions made (architectural, product, process)
+- Surprising or non-obvious patterns the operator discovered
+- User preferences expressed explicitly ("never X", "always Y")
+- Project state changes worth remembering long-term
+
+Do NOT propose entries for:
+- Routine task completion ("ran git status, output was X")
+- Tool error noise
+- Anything obvious from reading the code
+
+Output format: one memory entry per file. Each entry follows the format documented in MEMORY.md of the current brain repo. Mark each with `type: feedback | user | project | reference` per the canonical types.
+
+Each entry MUST be a single self-contained markdown block starting with `---` frontmatter:
+
+---
+name: short-kebab-case-name
+description: one-line description of what this memory captures
+type: feedback | user | project | reference
+---
+
+Entry body. For feedback/project types, structure as:
+- Lead with the rule/fact
+- **Why:** the reason (incident, preference, constraint)
+- **How to apply:** when/where this guidance kicks in
+
+Separate multiple entries with a blank line followed by another `---` block. If no entries are warranted, output exactly: `NO_PROPOSALS`.
+
+Transcript:
+<<<INSERT TRANSCRIPT HERE>>>
