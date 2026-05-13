@@ -79,6 +79,215 @@ case "$cmd" in
     fi
     ;;
 
+  ask)
+    if [[ $# -lt 1 ]]; then
+      echo "Usage: brain ask \"<question>\"" >&2
+      exit 1
+    fi
+    ROOT="$(find_root)" || { echo "brain: no .brain-config.json found" >&2; exit 1; }
+    cd "$ROOT"
+    QUESTION="$*"
+    python3 - "$ROOT" "$QUESTION" <<'PYEOF'
+import json, os, re, sys, subprocess, pathlib, urllib.request
+
+root = pathlib.Path(sys.argv[1])
+question = sys.argv[2].strip()
+if not question:
+    print("brain ask: empty question", file=sys.stderr)
+    sys.exit(1)
+
+api_key = os.environ.get("ANTHROPIC_API_KEY")
+if not api_key:
+    print("ERROR: ANTHROPIC_API_KEY not set.", file=sys.stderr)
+    print("  export ANTHROPIC_API_KEY=sk-ant-... (add it to your shell rc to persist).", file=sys.stderr)
+    sys.exit(1)
+
+def have(cmd: str) -> bool:
+    try:
+        subprocess.run(["which", cmd], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        return True
+    except Exception:
+        return False
+
+# Drop common stop-words; keep nouns / verbs / proper nouns.
+stopwords = {
+    "the","a","an","is","are","was","were","be","been","being","of","in","on","at","to",
+    "for","with","and","or","but","if","then","that","this","these","those","i","we","you",
+    "they","he","she","it","do","does","did","done","what","when","where","who","why","how",
+    "about","from","as","by","my","our","your","their","its","decided","decide","decision",
+    "have","has","had","will","would","should","could","can","may","might","ll","ve","s","t",
+    "re","got","get","gotten","going","go","just","like","want","need","needed","there",
+}
+tokens = re.findall(r"[A-Za-z0-9][A-Za-z0-9_-]+", question.lower())
+keywords = [t for t in tokens if t not in stopwords and len(t) > 2]
+seen = set()
+keywords = [k for k in keywords if not (k in seen or seen.add(k))]
+
+# Hybrid-search scopes: memory/, sessions/, root *.md, and any top-level
+# project sub-directory the member has organised (e.g. clients/, products/).
+search_targets: list[str] = []
+def add_if_exists(p: pathlib.Path) -> None:
+    if p.exists():
+        search_targets.append(str(p))
+
+add_if_exists(root / "memory")
+add_if_exists(root / "sessions")
+for top in sorted(root.iterdir()):
+    if top.is_file() and top.suffix == ".md":
+        search_targets.append(str(top))
+    elif top.is_dir() and not top.name.startswith(".") and not top.name.startswith("_") \
+            and top.name not in {"memory", "sessions", "node_modules", "templates"}:
+        search_targets.append(str(top))
+
+matches: list[tuple[str, int, str]] = []
+
+if have("rg") and keywords:
+    pattern = "|".join(re.escape(k) for k in keywords[:8])
+    rg_args = [
+        "rg", "-i", "--no-heading", "--line-number", "--max-count=3",
+        "--max-filesize=2M",
+        "--glob", "!_archived/**",
+        "--glob", "!.git/**",
+        "--glob", "!.proposed/**",
+        "--glob", "*.md",
+        pattern,
+        *search_targets,
+    ]
+    try:
+        out = subprocess.check_output(rg_args, text=True, stderr=subprocess.DEVNULL)
+    except subprocess.CalledProcessError:
+        out = ""
+    for line in out.splitlines():
+        parts = line.split(":", 2)
+        if len(parts) < 3:
+            continue
+        fpath, lno, snippet = parts[0], parts[1], parts[2]
+        try:
+            lno_i = int(lno)
+        except ValueError:
+            continue
+        try:
+            rel = str(pathlib.Path(fpath).resolve().relative_to(root))
+        except Exception:
+            rel = fpath
+        matches.append((rel, lno_i, snippet.strip()))
+else:
+    if not keywords:
+        print("brain ask: question yielded no searchable keywords after stop-word filter.", file=sys.stderr)
+        sys.exit(1)
+    pattern = "|".join(re.escape(k) for k in keywords[:8])
+    for target in search_targets:
+        try:
+            out = subprocess.check_output(
+                ["grep", "-rniE", "--include=*.md", "--max-count=3", pattern, target],
+                text=True, stderr=subprocess.DEVNULL,
+            )
+        except subprocess.CalledProcessError:
+            out = ""
+        for line in out.splitlines():
+            parts = line.split(":", 2)
+            if len(parts) < 3:
+                continue
+            fpath, lno, snippet = parts[0], parts[1], parts[2]
+            try:
+                lno_i = int(lno)
+            except ValueError:
+                continue
+            try:
+                rel = str(pathlib.Path(fpath).resolve().relative_to(root))
+            except Exception:
+                rel = fpath
+            matches.append((rel, lno_i, snippet.strip()))
+
+def score(snippet: str) -> int:
+    s = 0
+    low = snippet.lower()
+    for k in keywords:
+        if k in low:
+            s += 1
+    return s
+
+matches.sort(key=lambda m: (-score(m[2]), m[0], m[1]))
+top_matches = matches[:20]
+
+context_blocks: list[str] = []
+seen_block: set[tuple[str, int]] = set()
+for rel, lno, _snip in top_matches:
+    key = (rel, lno // 8)
+    if key in seen_block:
+        continue
+    seen_block.add(key)
+    try:
+        full = (root / rel).read_text(errors="replace").splitlines()
+    except Exception:
+        continue
+    start = max(0, lno - 4)
+    end = min(len(full), lno + 4)
+    excerpt = "\n".join(f"{i+1}: {full[i]}" for i in range(start, end))
+    context_blocks.append(f"--- {rel}:{lno}\n{excerpt}")
+    if len(context_blocks) >= 10:
+        break
+
+if not context_blocks:
+    context_blob = "(no matches in the brain)"
+else:
+    context_blob = "\n\n".join(context_blocks)
+
+system_prompt = (
+    "You are a brain query agent. Answer the user's question using ONLY the search "
+    "results provided below. Cite the file path(s) for every claim using the format "
+    "`path/to/file.md:LINE`. If the search results do not contain enough information "
+    "to answer, respond with exactly: \"I don't have context on this — first time "
+    "it's come up.\" and stop. Never fabricate file paths, line numbers, dates, "
+    "dollar amounts, SHAs, or names. Lead with the answer. No padding."
+)
+
+user_prompt = (
+    f"QUESTION:\n{question}\n\n"
+    f"SEARCH RESULTS:\n{context_blob}\n\n"
+    "Format your reply as:\n"
+    "  <answer paragraph(s)>\n"
+    "\n"
+    "Sources:\n"
+    "  <path/to/file.md:LINE>\n"
+    "  <path/to/file.md:LINE>\n"
+)
+
+req = urllib.request.Request(
+    "https://api.anthropic.com/v1/messages",
+    data=json.dumps({
+        "model": "claude-haiku-4-5-20251001",
+        "max_tokens": 1024,
+        "system": system_prompt,
+        "messages": [{"role": "user", "content": user_prompt}],
+    }).encode(),
+    headers={
+        "content-type": "application/json",
+        "x-api-key": api_key,
+        "anthropic-version": "2023-06-01",
+    },
+    method="POST",
+)
+try:
+    with urllib.request.urlopen(req, timeout=60) as resp:
+        data = json.loads(resp.read())
+except Exception as e:
+    print(f"brain ask: API error: {e}", file=sys.stderr)
+    sys.exit(2)
+
+text = ""
+for c in data.get("content", []):
+    if c.get("type") == "text":
+        text += c.get("text", "")
+text = text.strip()
+if not text:
+    print("I don't have context on this — first time it's come up.")
+    sys.exit(0)
+
+print(text)
+PYEOF
+    ;;
+
   consolidate)
     ROOT="$(find_root)" || { echo "brain: no .brain-config.json found" >&2; exit 1; }
     cd "$ROOT"
@@ -245,7 +454,10 @@ USAGE
 
 COMMANDS
   status             Heartbeat check: total sessions, last capture, size, pending proposals
-  search <query>     Ripgrep over sessions/ and memory/
+  search <query>     Ripgrep over sessions/ and memory/ (raw hits, no synthesis)
+  ask "<question>"   Plain-English query: hybrid search across memory/, sessions/,
+                     and top-level project sub-dirs → Haiku synthesizes a cited
+                     answer (AI Pocket Agency Output Pack module O7)
   consolidate        Send new sessions to Claude Haiku → write memory/.proposed/ for review
   sync               git pull --rebase && git push (multi-machine sync)
   prune [days]       Archive sessions/YYYY-MM-DD/ older than N days (default 90)
@@ -255,6 +467,7 @@ COMMANDS
 EXAMPLES
   brain status
   brain search "stripe webhook"
+  brain ask "what did we decide about the refund policy?"
   brain consolidate
   brain prune 60
 
@@ -273,8 +486,11 @@ CONFIG
     verbose_tool_calls    — bool, expand tool I/O instead of one-line summaries
 
 ANTHROPIC_API_KEY
-  `brain consolidate` reads ANTHROPIC_API_KEY from the environment, falling
-  back to: getsecret op://Personal/Anthropic/api_key
+  `brain consolidate` and `brain ask` read ANTHROPIC_API_KEY from the
+  environment. Set it in your shell rc (e.g. ~/.zshrc or ~/.bashrc):
+    export ANTHROPIC_API_KEY=sk-ant-...
+  Or pass it inline for a quick test:
+    ANTHROPIC_API_KEY=sk-ant-... brain ask "what did we decide about X?"
 EOF
     ;;
 
