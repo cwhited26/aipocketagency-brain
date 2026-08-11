@@ -1,0 +1,203 @@
+#!/usr/bin/env bash
+# workstation - diagnostics, verification, updates, profiles, and dispatch for an AI workstation.
+
+set -euo pipefail
+
+WORKSTATION_HOME="${APA_WORKSTATION_HOME:-$HOME}"
+CONFIG_FILE="${APA_WORKSTATION_CONFIG:-$WORKSTATION_HOME/.config/aipocketagency/workstation.json}"
+
+fail() { printf 'workstation: %s\n' "$*" >&2; exit 1; }
+say() { printf '%-22s %s\n' "$1" "$2"; }
+
+config_get() {
+  local key="$1"
+  python3 - "$CONFIG_FILE" "$key" <<'PY'
+import json, pathlib, sys
+path = pathlib.Path(sys.argv[1])
+if not path.exists():
+    raise SystemExit(1)
+data = json.loads(path.read_text())
+value = data.get(sys.argv[2], "")
+print(value if isinstance(value, (str, int, float)) else "")
+PY
+}
+
+require_config() {
+  [[ -f "$CONFIG_FILE" ]] || fail "not installed; run install-workstation.sh first"
+}
+
+command_status() {
+  local name="$1"
+  if command -v "$name" >/dev/null 2>&1; then
+    say "$name" "ready ($(command -v "$name"))"
+  else
+    say "$name" "missing"
+  fi
+}
+
+doctor() {
+  require_config
+  local brain_root profile_file
+  brain_root="$(config_get brain_root)"
+  profile_file="$(config_get profile_file)"
+  say "config" "$CONFIG_FILE"
+  [[ -d "$brain_root" ]] && say "brain root" "ready ($brain_root)" || say "brain root" "missing ($brain_root)"
+  [[ -f "$brain_root/AGENTS.md" ]] && say "brain contract" "ready" || say "brain contract" "missing"
+  [[ -f "$profile_file" ]] && say "profile" "ready ($(config_get profile_id))" || say "profile" "missing ($profile_file)"
+  grep -q "BEGIN AI POCKET AGENCY WORKSTATION" "$WORKSTATION_HOME/.codex/AGENTS.md" 2>/dev/null \
+    && say "Codex layer" "ready" || say "Codex layer" "missing"
+  grep -q "BEGIN AI POCKET AGENCY WORKSTATION" "$WORKSTATION_HOME/.claude/CLAUDE.md" 2>/dev/null \
+    && say "Claude layer" "ready" || say "Claude layer" "missing"
+  for tool in git python3 gh op node pnpm codex claude; do command_status "$tool"; done
+  if command -v gh >/dev/null 2>&1; then
+    gh auth status >/dev/null 2>&1 && say "GitHub auth" "ready" || say "GitHub auth" "not signed in"
+  fi
+  if command -v op >/dev/null 2>&1; then
+    op whoami >/dev/null 2>&1 && say "1Password auth" "ready" || say "1Password auth" "locked or not signed in"
+  fi
+}
+
+status() {
+  require_config
+  local brain_root
+  brain_root="$(config_get brain_root)"
+  say "profile" "$(config_get profile_id)"
+  say "brain root" "$brain_root"
+  if git -C "$brain_root" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+    say "brain branch" "$(git -C "$brain_root" branch --show-current)"
+    git -C "$brain_root" status --short
+  fi
+  if command -v brain >/dev/null 2>&1; then
+    (cd "$brain_root" && brain status)
+  fi
+}
+
+show_profile() {
+  require_config
+  local profile_file
+  profile_file="$(config_get profile_file)"
+  python3 -m json.tool "$profile_file"
+}
+
+verify_repo() {
+  require_config
+  local full="false" target="$(pwd)"
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --full) full="true" ;;
+      *) target="$1" ;;
+    esac
+    shift
+  done
+  target="$(cd "$target" && pwd)"
+  git -C "$target" rev-parse --is-inside-work-tree >/dev/null 2>&1 || fail "not a git repository: $target"
+  say "repository" "$target"
+  git -C "$target" status --short
+  git -C "$target" diff --check
+  [[ "$full" == "true" ]] || { say "quick verification" "passed; add --full for declared scripts"; return; }
+  [[ -f "$target/package.json" ]] || { say "full verification" "no package.json; diff check passed"; return; }
+
+  local runner
+  if [[ -f "$target/pnpm-lock.yaml" ]]; then runner="pnpm"
+  elif [[ -f "$target/bun.lock" || -f "$target/bun.lockb" ]]; then runner="bun"
+  elif [[ -f "$target/yarn.lock" ]]; then runner="yarn"
+  else runner="npm"
+  fi
+  command -v "$runner" >/dev/null 2>&1 || fail "$runner is required by this repository"
+
+  local scripts
+  scripts="$(python3 - "$target/package.json" <<'PY'
+import json, pathlib, sys
+scripts = json.loads(pathlib.Path(sys.argv[1]).read_text()).get("scripts", {})
+for name in ("typecheck", "test", "build"):
+    if name in scripts:
+        print(name)
+PY
+)"
+  [[ -n "$scripts" ]] || { say "full verification" "no standard scripts declared; diff check passed"; return; }
+  while IFS= read -r script; do
+    say "running" "$runner run $script"
+    (cd "$target" && "$runner" run "$script")
+  done <<< "$scripts"
+}
+
+dispatch_mission() {
+  require_config
+  local agent="codex" repo="" task=""
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --agent) agent="${2:-}"; shift ;;
+      --repo) repo="${2:-}"; shift ;;
+      --task) task="${2:-}"; shift ;;
+      *) fail "unknown dispatch option: $1" ;;
+    esac
+    shift
+  done
+  [[ "$agent" == "codex" || "$agent" == "claude" ]] || fail "agent must be codex or claude"
+  [[ -n "$repo" ]] || fail "dispatch requires --repo owner/name"
+  [[ -n "$task" ]] || fail "dispatch requires --task text"
+  local brain_root profile_id inbox
+  brain_root="$(config_get brain_root)"
+  profile_id="$(config_get profile_id)"
+  inbox="$brain_root/dispatch/inbox"
+  mkdir -p "$inbox"
+  python3 - "$inbox" "$agent" "$repo" "$task" "$profile_id" <<'PY'
+import datetime, json, pathlib, re, secrets, sys
+inbox, agent, repo, task, profile = sys.argv[1:]
+stamp = datetime.datetime.now(datetime.timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+slug = re.sub(r"[^a-z0-9]+", "-", task.lower()).strip("-")[:48] or "mission"
+mission_id = f"{stamp}-{slug}-{secrets.token_hex(3)}"
+payload = {
+    "schema_version": 1,
+    "mission_id": mission_id,
+    "created_at": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+    "agent": agent,
+    "target_repo": repo,
+    "task": task,
+    "profile": profile,
+    "status": "queued"
+}
+path = pathlib.Path(inbox) / f"{mission_id}.json"
+path.write_text(json.dumps(payload, indent=2) + "\n")
+print(path)
+PY
+}
+
+update_install() {
+  require_config
+  local source_dir brain_root profile_file
+  source_dir="$(config_get source_dir)"
+  brain_root="$(config_get brain_root)"
+  profile_file="$(config_get profile_file)"
+  [[ -f "$source_dir/install-workstation.sh" ]] || fail "installer source missing: $source_dir"
+  if git -C "$source_dir" diff --quiet && git -C "$source_dir" diff --cached --quiet; then
+    git -C "$source_dir" pull --ff-only
+  else
+    fail "installer source has local changes; update it manually"
+  fi
+  bash "$source_dir/install-workstation.sh" --source-dir "$source_dir" --brain-root "$brain_root" --profile-file "$profile_file"
+}
+
+usage() {
+  cat <<'EOF'
+AI Pocket Agency workstation
+
+  workstation doctor
+  workstation status
+  workstation profile
+  workstation verify [--full] [repo]
+  workstation dispatch --repo owner/name --agent codex|claude --task "..."
+  workstation update
+EOF
+}
+
+case "${1:-help}" in
+  doctor) shift; doctor "$@" ;;
+  status) shift; status "$@" ;;
+  profile) shift; show_profile "$@" ;;
+  verify) shift; verify_repo "$@" ;;
+  dispatch) shift; dispatch_mission "$@" ;;
+  update) shift; update_install "$@" ;;
+  help|-h|--help) usage ;;
+  *) fail "unknown command: $1" ;;
+esac

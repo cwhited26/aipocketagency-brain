@@ -1,0 +1,18 @@
+{
+  "schema_version": 1,
+  "id": "operator",
+  "label": "Owner operator",
+  "description": "Full local build access with explicit gates for commits, pushes, deploys, and destructive actions.",
+  "permissions": {
+    "read": true,
+    "write": true,
+    "commit": true,
+    "push": false,
+    "deploy": false,
+    "destructive_actions": false
+  },
+  "required_tools": ["git", "python3"],
+  "recommended_tools": ["gh", "op", "node", "pnpm", "codex", "claude"],
+  "verification": ["git diff --check", "declared typecheck", "declared tests", "declared production build"]
+}
+

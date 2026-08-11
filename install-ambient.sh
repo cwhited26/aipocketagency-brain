@@ -29,7 +29,8 @@ SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 HOOKS_SOURCE_DIR="$SCRIPT_DIR/templates/hooks"
 GITHOOKS_SOURCE_DIR="$SCRIPT_DIR/templates/git-hooks"
 
-CLAUDE_DIR="$HOME/.claude"
+AMBIENT_HOME="${APA_WORKSTATION_HOME:-$HOME}"
+CLAUDE_DIR="$AMBIENT_HOME/.claude"
 CLAUDE_HOOKS_DIR="$CLAUDE_DIR/hooks"
 CLAUDE_SETTINGS="$CLAUDE_DIR/settings.json"
 
@@ -181,7 +182,7 @@ if [ "$BRAIN_CLI_SRC" != "$BRAIN_ROOT/bin/brain" ]; then
 fi
 chmod +x "$BRAIN_CLI_SRC"
 
-LOCAL_BIN="$HOME/.local/bin"
+LOCAL_BIN="$AMBIENT_HOME/.local/bin"
 mkdir -p "$LOCAL_BIN"
 ln -sf "$BRAIN_CLI_SRC" "$LOCAL_BIN/brain"
 say "symlinked $LOCAL_BIN/brain -> $BRAIN_CLI_SRC"
@@ -202,8 +203,8 @@ ambient capture installed.
 next:
   1. ensure ~/.local/bin is on PATH:
      echo 'export PATH="\$HOME/.local/bin:\$PATH"' >> ~/.zshrc && source ~/.zshrc
-  2. export ANTHROPIC_API_KEY (or rely on the getsecret fallback in 'brain consolidate'):
-     export ANTHROPIC_API_KEY=\$(getsecret op://Personal/Anthropic/api_key)
+  2. configure ANTHROPIC_API_KEY through your secret manager when you use
+     'brain consolidate'. Do not paste the value into this repo or shell history.
   3. run a Claude Code session inside $BRAIN_ROOT — your transcript will land at
      sessions/$(date +%Y-%m-%d)/HHmmss-*.md.
   4. verify with: brain status

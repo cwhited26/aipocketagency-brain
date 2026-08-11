@@ -1,8 +1,42 @@
 # aipocketagency-brain
 
-The source of truth for AI Pocket Agency members — templates, deliverables, and the install pattern.
+The source of truth for AI Pocket Agency members: templates, deliverables, the brain pattern, and a
+repeatable AI workstation installer.
 
 This repo is the public-facing companion to the AI Pocket Agency Skool community at `skool.com/ai-pocket-agency`. Every deliverable referenced inside the classroom modules lives here at a stable URL so members can read, download, copy, or fork without having to log back in to Skool.
+
+## Install the complete workstation
+
+This is the fastest path from a clean machine to one shared rule system for Codex, Claude Code,
+project repositories, and optional phone dispatch:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/cwhited26/aipocketagency-brain/main/install-workstation.sh \
+  | bash -s -- --profile operator --brain-root "$HOME/ai-brain"
+```
+
+Then run:
+
+```bash
+workstation doctor
+workstation status
+```
+
+The installer is additive and safe to rerun. It preserves existing brain files, backs up changed
+global agent files, writes no credentials, and keeps its own changes inside marked blocks. Start
+with [the installation guide](docs/INSTALL.md), read [the architecture](docs/WORKSTATION_ARCHITECTURE.md),
+and enable [phone dispatch](docs/PHONE_DISPATCH.md) only after the local system is verified.
+
+The included operator, builder, and reviewer profiles are generic. A company or product can provide
+an external profile without forking the installer. `docs/WEBINAR_TRAINING.md` is the repeatable
+training outline for teaching the same system outside Booster.
+
+Maintainers can verify installer syntax, JSON profiles, an isolated install, idempotent rerun, CLI
+diagnostics, repository verification, and mission creation with:
+
+```bash
+bash tests/workstation-smoke.sh
+```
 
 ## What is in here
 
@@ -157,7 +191,7 @@ Architectural rationale, failure modes, and the Module 6 curriculum live in `Amb
 
 - Claude Code installed and on your PATH (`which claude` returns a path)
 - `python3` (system Python on macOS / Linux is fine)
-- `ANTHROPIC_API_KEY` in your environment when you want to run `brain consolidate`
+- `ANTHROPIC_API_KEY` resolved through your secret manager when you want to run `brain consolidate`
 - *Optional but recommended:* `brew install gitleaks` for a second commit-time scan
 
 ### Install

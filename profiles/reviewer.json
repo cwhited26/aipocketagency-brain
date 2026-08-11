@@ -1,0 +1,18 @@
+{
+  "schema_version": 1,
+  "id": "reviewer",
+  "label": "Read-only reviewer",
+  "description": "Inspection, diagnosis, planning, and evidence collection without file changes.",
+  "permissions": {
+    "read": true,
+    "write": false,
+    "commit": false,
+    "push": false,
+    "deploy": false,
+    "destructive_actions": false
+  },
+  "required_tools": ["git", "python3"],
+  "recommended_tools": ["gh", "codex", "claude"],
+  "verification": ["git status --short", "git log", "read-only runtime checks"]
+}
+

@@ -1,0 +1,18 @@
+{
+  "schema_version": 1,
+  "id": "builder",
+  "label": "Scoped builder",
+  "description": "Implementation access inside the assigned repository. Publishing and infrastructure changes require a separate gate.",
+  "permissions": {
+    "read": true,
+    "write": true,
+    "commit": false,
+    "push": false,
+    "deploy": false,
+    "destructive_actions": false
+  },
+  "required_tools": ["git", "python3"],
+  "recommended_tools": ["node", "pnpm", "codex", "claude"],
+  "verification": ["git diff --check", "declared typecheck", "declared tests", "declared production build"]
+}
+

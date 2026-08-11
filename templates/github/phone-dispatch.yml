@@ -1,0 +1,113 @@
+name: Phone Agent Dispatch
+
+on:
+  workflow_dispatch:
+    inputs:
+      task:
+        description: Natural-language mission. Never include secrets.
+        required: true
+      agent:
+        description: Agent runtime
+        type: choice
+        options: [codex, claude]
+        default: codex
+      target_repo:
+        description: Allowlisted owner/repository
+        required: true
+      allow_write:
+        description: Verify, commit, and push agent changes
+        type: boolean
+        default: false
+      dispatch_id:
+        description: Optional ID from the phone or dashboard dispatcher
+        required: false
+
+jobs:
+  run:
+    runs-on: [self-hosted]
+    timeout-minutes: 45
+    permissions:
+      contents: write
+    env:
+      TARGET_REPO: ${{ inputs.target_repo }}
+      TASK_TEXT: ${{ inputs.task }}
+      AGENT_NAME: ${{ inputs.agent }}
+      ALLOW_WRITE: ${{ inputs.allow_write }}
+      ALLOWED_REPOSITORIES: ${{ vars.ALLOWED_REPOSITORIES }}
+    steps:
+      - name: Validate repository allowlist
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import os
+          allowed = {item.strip() for item in os.environ.get("ALLOWED_REPOSITORIES", "").split(",") if item.strip()}
+          target = os.environ["TARGET_REPO"]
+          if target not in allowed:
+              raise SystemExit(f"repository is not allowlisted: {target}")
+          PY
+
+      - uses: actions/checkout@v4
+        with:
+          repository: ${{ inputs.target_repo }}
+          token: ${{ secrets.CROSS_REPO_PAT }}
+          persist-credentials: false
+
+      - name: Run scoped agent
+        shell: bash
+        run: |
+          if [[ "$AGENT_NAME" == "codex" ]]; then
+            printf '%s' "$TASK_TEXT" | codex exec -s workspace-write -C "$GITHUB_WORKSPACE" \
+              --output-last-message "$RUNNER_TEMP/agent-result.txt" -
+          else
+            printf '%s' "$TASK_TEXT" | claude -p --permission-mode acceptEdits \
+              --output-format text > "$RUNNER_TEMP/agent-result.txt"
+          fi
+
+      - name: Verify changes
+        if: ${{ inputs.allow_write }}
+        shell: bash
+        run: workstation verify --full "$GITHUB_WORKSPACE"
+
+      - name: Commit and push verified changes
+        if: ${{ inputs.allow_write }}
+        shell: bash
+        env:
+          PUSH_TOKEN: ${{ secrets.CROSS_REPO_PAT }}
+          GIT_AUTHOR_NAME: ${{ vars.DISPATCH_GIT_NAME }}
+          GIT_AUTHOR_EMAIL: ${{ vars.DISPATCH_GIT_EMAIL }}
+        run: |
+          git config user.name "$GIT_AUTHOR_NAME"
+          git config user.email "$GIT_AUTHOR_EMAIL"
+          git add -A
+          if git diff --staged --quiet; then
+            exit 0
+          fi
+          git commit -m "chore: complete phone dispatch" \
+            -m "[$(date +%F)] ${AGENT_NAME} - verified phone-dispatched mission"
+          git remote set-url origin "https://x-access-token:${PUSH_TOKEN}@github.com/${TARGET_REPO}.git"
+          git push origin HEAD
+
+      - name: Send bounded callback
+        if: always() && vars.DISPATCH_CALLBACK_URL != ''
+        shell: bash
+        env:
+          CALLBACK_URL: ${{ vars.DISPATCH_CALLBACK_URL }}
+          CALLBACK_SECRET: ${{ secrets.DISPATCH_CALLBACK_SECRET }}
+          DISPATCH_ID: ${{ inputs.dispatch_id }}
+        run: |
+          python3 - "$RUNNER_TEMP/agent-result.txt" > "$RUNNER_TEMP/callback.json" <<'PY'
+          import json, os, pathlib, sys
+          path = pathlib.Path(sys.argv[1])
+          result = path.read_text(errors="replace")[:4000] if path.exists() else ""
+          print(json.dumps({
+              "dispatch_id": os.environ.get("DISPATCH_ID", ""),
+              "agent": os.environ.get("AGENT_NAME", ""),
+              "target_repo": os.environ.get("TARGET_REPO", ""),
+              "result": result
+          }))
+          PY
+          curl --fail --silent --show-error -X POST "$CALLBACK_URL" \
+            -H "Authorization: Bearer $CALLBACK_SECRET" \
+            -H "Content-Type: application/json" \
+            --data-binary "@$RUNNER_TEMP/callback.json"
+
