@@ -79,6 +79,27 @@ show_profile() {
   python3 -m json.tool "$profile_file"
 }
 
+show_guide() {
+  require_config
+  local brain_root source_dir local_guide online_guide
+  brain_root="$(config_get brain_root)"
+  source_dir="$(config_get source_dir)"
+  local_guide="$brain_root/START_HERE.md"
+  if [[ ! -f "$local_guide" && -f "$source_dir/docs/START_HERE.md" ]]; then
+    local_guide="$source_dir/docs/START_HERE.md"
+  fi
+  online_guide="https://github.com/cwhited26/aipocketagency-brain/blob/main/docs/START_HERE.md"
+
+  printf '\nAI Workstation: start here\n\n'
+  say "1. Read the guide" "$local_guide"
+  say "2. Check setup" "workstation doctor"
+  say "3. Personalize" "$brain_root/CLAUDE.md and $brain_root/AGENTS.md"
+  say "4. Test the brain" "ask your agent to read AGENTS.md, CLAUDE.md, and MEMORY.md"
+  say "5. Verify a repo" "workstation verify --full /path/to/project"
+  printf '\nOnline guide:\n  %s\n' "$online_guide"
+  printf '\nSafe support output:\n  workstation doctor\n  workstation status\n\n'
+}
+
 verify_repo() {
   require_config
   local full="false" target="$(pwd)"
@@ -182,6 +203,7 @@ usage() {
   cat <<'EOF'
 AI Pocket Agency workstation
 
+  workstation guide
   workstation doctor
   workstation status
   workstation profile
@@ -192,6 +214,7 @@ EOF
 }
 
 case "${1:-help}" in
+  guide|start) shift; show_guide "$@" ;;
   doctor) shift; doctor "$@" ;;
   status) shift; status "$@" ;;
   profile) shift; show_profile "$@" ;;

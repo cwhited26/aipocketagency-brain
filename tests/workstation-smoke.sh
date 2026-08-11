@@ -23,6 +23,7 @@ for profile in operator builder reviewer; do
 done
 
 [[ ! -e "$SOURCE_DIR/docs/WEBINAR_TRAINING.md" ]]
+[[ -f "$SOURCE_DIR/docs/START_HERE.md" ]]
 if grep -R -i -n "booster" \
   "$SOURCE_DIR/README.md" \
   "$SOURCE_DIR/docs" \
@@ -45,6 +46,10 @@ APA_WORKSTATION_HOME="$TEST_ROOT" "$SOURCE_DIR/install-workstation.sh" \
   --skip-ambient >/dev/null
 
 WORKSTATION="$TEST_ROOT/.local/bin/workstation"
+[[ -f "$TEST_ROOT/brain/START_HERE.md" ]]
+GUIDE_OUTPUT="$(APA_WORKSTATION_HOME="$TEST_ROOT" "$WORKSTATION" guide)"
+grep -q 'START_HERE.md' <<< "$GUIDE_OUTPUT"
+grep -q 'workstation doctor' <<< "$GUIDE_OUTPUT"
 APA_WORKSTATION_HOME="$TEST_ROOT" "$WORKSTATION" doctor >/dev/null
 APA_WORKSTATION_HOME="$TEST_ROOT" "$WORKSTATION" verify "$TEST_ROOT/brain" >/dev/null
 

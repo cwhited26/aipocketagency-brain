@@ -2,6 +2,9 @@
 
 The installer supports macOS, Linux, and WSL. It does not request or write secret values.
 
+If terminal setup is unfamiliar, begin with [Start Here](START_HERE.md). It explains every step in
+plain language, what success looks like, and exactly what to send someone when you need help.
+
 ## The one-command path
 
 ```bash
@@ -13,6 +16,16 @@ That command creates a brain from the public templates, installs layered global 
 Codex and Claude Code, installs the `brain` and `workstation` commands, and enables ambient Claude
 session capture. Existing agent files are backed up before the installer replaces its own managed
 block. Existing brain files are never overwritten.
+
+When the installer finishes, run:
+
+```bash
+workstation guide
+```
+
+The guide command prints the local Start Here path, the active brain path, the first setup checks,
+and the stable online guide. The installer also places `START_HERE.md` inside the brain root when
+that file does not already exist.
 
 To connect an existing private brain instead:
 
@@ -75,4 +88,3 @@ workstation update
 
 The update command refuses to overwrite a locally modified installer checkout. It pulls a clean
 checkout with fast-forward only, then reruns the idempotent installer.
-

@@ -4,7 +4,7 @@
 
 set -euo pipefail
 
-VERSION="0.1.0"
+VERSION="0.2.0"
 REPOSITORY_URL="https://github.com/cwhited26/aipocketagency-brain.git"
 WORKSTATION_HOME="${APA_WORKSTATION_HOME:-$HOME}"
 DEFAULT_SOURCE_DIR="$WORKSTATION_HOME/.local/share/aipocketagency/workstation-source"
@@ -178,6 +178,7 @@ fi
 install_if_absent "$SOURCE_DIR/templates/AGENTS.md" "$BRAIN_ROOT/AGENTS.md"
 install_if_absent "$SOURCE_DIR/templates/CLAUDE.md" "$BRAIN_ROOT/CLAUDE.md"
 install_if_absent "$SOURCE_DIR/templates/MEMORY.md" "$BRAIN_ROOT/MEMORY.md"
+install_if_absent "$SOURCE_DIR/docs/START_HERE.md" "$BRAIN_ROOT/START_HERE.md"
 install_if_absent "$SOURCE_DIR/templates/daily-log.md" "$BRAIN_ROOT/Daily_Log.md"
 install_if_absent "$SOURCE_DIR/templates/change-log.md" "$BRAIN_ROOT/Change_Log.md"
 install_if_absent "$SOURCE_DIR/templates/decision-log.md" "$BRAIN_ROOT/Decision_Log.md"
@@ -301,10 +302,9 @@ AI workstation installed.
   commands:    $LOCAL_BIN/workstation, $LOCAL_BIN/brain
 
 Next:
-  1. Customize $BRAIN_ROOT/CLAUDE.md and $BRAIN_ROOT/AGENTS.md.
-  2. Run: workstation doctor
-  3. Run: workstation verify --full /path/to/a/project
-  4. Configure phone dispatch only after completing docs/PHONE_DISPATCH.md.
+  1. Run: workstation guide
+  2. Follow: $BRAIN_ROOT/START_HERE.md
+  3. Run: workstation doctor
 
 No secret values were requested or written by this installer.
 EOF

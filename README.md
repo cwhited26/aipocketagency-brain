@@ -7,6 +7,9 @@ This repo is the public-facing companion to the AI Pocket Agency Skool community
 
 ## Install the complete workstation
 
+Not technical? Read [Start Here](docs/START_HERE.md) first. It walks from opening Terminal to the
+first successful agent test, explains the `doctor` output, and gives you safe support commands.
+
 This is the fastest path from a clean machine to one shared rule system for Codex, Claude Code,
 project repositories, and optional phone dispatch:
 
@@ -18,11 +21,13 @@ curl -fsSL https://raw.githubusercontent.com/cwhited26/aipocketagency-brain/main
 Then run:
 
 ```bash
+workstation guide
 workstation doctor
 workstation status
 ```
 
-The installer is additive and safe to rerun. It preserves existing brain files, backs up changed
+The installer is additive and safe to rerun. It also installs `START_HERE.md` into the brain root,
+preserves existing brain files, backs up changed
 global agent files, writes no credentials, and keeps its own changes inside marked blocks. Start
 with [the installation guide](docs/INSTALL.md), read [the architecture](docs/WORKSTATION_ARCHITECTURE.md),
 and enable [phone dispatch](docs/PHONE_DISPATCH.md) only after the local system is verified.
@@ -99,7 +104,10 @@ Every brain — yours, the one running each Custom Build, the one running each P
 
 The five modules in `deliverables/` walk you through installing this pattern, learning the conventions, writing memory the right way, handing off cleanly between agents, and wiring it to your own business.
 
-## Install your first brain in five steps
+## Advanced manual template path
+
+You do not need this section when you use `install-workstation.sh`. It is retained for builders who
+intentionally want to assemble the template by hand and understand every file operation.
 
 If you want to skip the classroom and get hands-on right now, here's the shortest path. Total time: ~15 minutes.
 
