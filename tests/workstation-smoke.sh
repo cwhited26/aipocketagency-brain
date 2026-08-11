@@ -22,6 +22,17 @@ for profile in operator builder reviewer; do
   python3 -m json.tool "$SOURCE_DIR/profiles/$profile.json" >/dev/null
 done
 
+[[ ! -e "$SOURCE_DIR/docs/WEBINAR_TRAINING.md" ]]
+if grep -R -i -n "booster" \
+  "$SOURCE_DIR/README.md" \
+  "$SOURCE_DIR/docs" \
+  "$SOURCE_DIR/profiles" \
+  "$SOURCE_DIR/templates" \
+  "$SOURCE_DIR/install-workstation.sh"; then
+  printf 'client-specific Booster content found in generic workstation package\n' >&2
+  exit 1
+fi
+
 "$SOURCE_DIR/install-workstation.sh" \
   --dry-run \
   --profile reviewer \
@@ -54,4 +65,3 @@ APA_WORKSTATION_HOME="$TEST_ROOT" "$SOURCE_DIR/install-workstation.sh" \
 [[ "$(grep -c '^<!-- BEGIN AI POCKET AGENCY WORKSTATION -->$' "$TEST_ROOT/.claude/CLAUDE.md")" == "1" ]]
 
 printf 'workstation smoke test passed\n'
-

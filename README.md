@@ -28,8 +28,8 @@ with [the installation guide](docs/INSTALL.md), read [the architecture](docs/WOR
 and enable [phone dispatch](docs/PHONE_DISPATCH.md) only after the local system is verified.
 
 The included operator, builder, and reviewer profiles are generic. A company or product can provide
-an external profile without forking the installer. `docs/WEBINAR_TRAINING.md` is the repeatable
-training outline for teaching the same system outside Booster.
+an external profile without forking the installer. Client profiles, client context, presenter notes,
+webinar material, and sales assets stay outside this public installer package.
 
 Maintainers can verify installer syntax, JSON profiles, an isolated install, idempotent rerun, CLI
 diagnostics, repository verification, and mission creation with:
