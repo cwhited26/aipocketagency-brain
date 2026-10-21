@@ -299,20 +299,12 @@ cursor = root / ".brain-cursor"
 proposed = root / "memory" / ".proposed"
 proposed.mkdir(parents=True, exist_ok=True)
 
-# ANTHROPIC_API_KEY: env first, then getsecret fallback
+# ANTHROPIC_API_KEY must be set in the environment (never committed).
 api_key = os.environ.get("ANTHROPIC_API_KEY")
 if not api_key:
-    try:
-        api_key = subprocess.check_output(
-            ["getsecret", "op://Personal/Anthropic/api_key"],
-            text=True, stderr=subprocess.DEVNULL,
-        ).strip()
-    except Exception:
-        pass
-if not api_key:
-    print("ERROR: ANTHROPIC_API_KEY not set and 1Password fallback failed.", file=sys.stderr)
-    print("  export ANTHROPIC_API_KEY=...", file=sys.stderr)
-    print("  or: ensure 'getsecret' is on PATH and op://Personal/Anthropic/api_key resolves", file=sys.stderr)
+    print("ERROR: ANTHROPIC_API_KEY is not set.", file=sys.stderr)
+    print("  Set it in your shell before running consolidate, e.g.:", file=sys.stderr)
+    print("    export ANTHROPIC_API_KEY=...   (load it from your password manager; never commit it)", file=sys.stderr)
     sys.exit(1)
 
 last_run = 0.0
