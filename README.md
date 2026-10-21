@@ -3,7 +3,7 @@
 The source of truth for AI Pocket Agency members: templates, deliverables, the brain pattern, and a
 repeatable AI workstation installer.
 
-This repo is the public-facing companion to the AI Pocket Agency Skool community at `skool.com/ai-pocket-agency`. Every deliverable referenced inside the classroom modules lives here at a stable URL so members can read, download, copy, or fork without having to log back in to Skool.
+This repo is the public-facing companion to the AI Pocket Agency Skool community at [skool.com/ai-pocket-agency-9047](https://www.skool.com/ai-pocket-agency-9047). Every deliverable referenced inside the classroom modules lives here at a stable URL so members can read, download, copy, or fork without having to log back in to Skool.
 
 ## Install the complete workstation
 
@@ -298,7 +298,7 @@ MIT. Use any template, any worksheet, any cheat sheet inside any project — com
 ## Context
 
 - AI Pocket Agency: `aipocketagency.com`
-- Community: `skool.com/ai-pocket-agency`
+- Community: [skool.com/ai-pocket-agency-9047](https://www.skool.com/ai-pocket-agency-9047)
 - Pricing: $47/mo founding 50, then $97/mo
 - Founder: Chase Whited
 - Parent: Whited Consulting
